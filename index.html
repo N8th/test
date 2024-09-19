@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f8f8;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        .receipts {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .receipt {
+            width: 300px;
+            padding: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            font-size: 12px;
+            margin-bottom: 20px;
+            page-break-inside: avoid; /* Prevents page breaks within receipts */
+        }
+        .header, .address, .timestamp {
+            text-align: center;
+            margin: 5px 0;
+        }
+        .items, .totals, .payment-info {
+            margin: 10px 0;
+        }
+        .items table, .totals table {
+            width: 100%;
+        }
+        table td {
+            padding: 4px 0;
+        }
+        .items td:last-child, .totals td:last-child {
+            text-align: right;
+        }
+        .payment-info p {
+            margin: 3px 0;
+        }
+        .inputs {
+            max-width: 300px;
+            font-size: 12px;
+        }
+        .inputs label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+    </style>
+    <title>Generate Multiple Receipts as PNG</title>
+</head>
+<body>
+    <div class="container">
+        <div class="inputs">
+            <h3>Receipt Options</h3>
+            
+            <label for="monster-name">Rename Item</label>
+            <input type="text" id="monster-name" value="T MONSTER ULT PCH" oninput="updateReceipt()">
+            
+            <label for="monster-price">Item Price</label>
+            <input type="number" id="monster-price" value="2.99" step="0.01" oninput="updateReceipt()">
+            
+            <label for="monster-qty">Item Quantity</label>
+            <input type="number" id="monster-qty" value="1" step="1" oninput="updateReceipt()">
+            
+            <label for="lines">Number of Lines</label>
+            <input type="number" id="lines" value="3" step="1" min="1" oninput="updateReceipt()">
+
+            <label for="tax">Tax Rate (%)</label>
+            <input type="number" id="tax-input" value="5" step="0.01" oninput="updateReceipt()">
+
+            <label for="min-date">Min Date</label>
+            <input type="datetime-local" id="min-date" value="2024-09-01T09:00" oninput="updateReceipt()">
+            
+            <label for="max-date">Max Date</label>
+            <input type="datetime-local" id="max-date" value="2024-09-10T21:00" oninput="updateReceipt()">
+
+            <label for="num-receipts">Number of Receipts</label>
+            <input type="number" id="num-receipts" value="1" min="1" step="1">
+
+            <button onclick="generateReceipts()">Generate X Receipts</button>
+        </div>
+
+        <div class="receipts" id="receipts-container"></div>
+
+        <button id="download-png" onclick="downloadReceiptsAsPNG()">Download Receipts as PNG</button>
+    </div>
+
+    <script>
+        // Initial JSON data
+        const receiptData = {
+            items: [
+                { name: "T MONSTER ULT PCH", qty: 1, price: 2.99 }
+            ],
+            taxRate: 5, // percentage tax rate
+            cardType: "DEBIT",
+            authTime: "070404",
+            acctNumber: "2336",
+            transType: "SALE",
+            terminalSeqNum: "000000",
+            timestamp: "9/11/24 7:04:10 AM"
+        };
+
+        // Function to get a random date between minDate and maxDate
+        function getRandomDate(minDate, maxDate) {
+            const minTime = new Date(minDate).getTime();
+            const maxTime = new Date(maxDate).getTime();
+            const randomTime = new Date(minTime + Math.random() * (maxTime - minTime));
+
+            return randomTime.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
+        }
+
+        // Function to generate random auth time, account number, and terminal sequence number
+        function generateRandomAuthTime() {
+            const hours = Math.floor(Math.random() * 24).toString().padStart(2, '0');
+            const minutes = Math.floor(Math.random() * 60).toString().padStart(2, '0');
+            const seconds = Math.floor(Math.random() * 60).toString().padStart(2, '0');
+            return `${hours}${minutes}${seconds}`;
+        }
+
+        function generateRandomAcctNumber() {
+            return Math.floor(1000 + Math.random() * 9000); // Generates a random 4-digit number
+        }
+
+        function generateRandomTerminalSeqNum() {
+            return Math.floor(100000 + Math.random() * 900000).toString(); // Generates a random 6-digit number
+        }
+
+        // Function to create a single receipt dynamically
+        function createReceipt() {
+            // Get the updated values from inputs
+            const name = document.getElementById('monster-name').value;
+            const price = parseFloat(document.getElementById('monster-price').value);
+            const quantity = parseInt(document.getElementById('monster-qty').value);
+            const lines = parseInt(document.getElementById('lines').value);
+            const taxRate = parseFloat(document.getElementById('tax-input').value);
+            const minDate = document.getElementById('min-date').value;
+            const maxDate = document.getElementById('max-date').value;
+
+            receiptData.items[0].name = name;
+            receiptData.items[0].price = price;
+            receiptData.items[0].qty = quantity;
+            receiptData.taxRate = taxRate;
+
+            // Calculate subtotal and total
+            const subtotal = receiptData.items[0].price * receiptData.items[0].qty * lines;
+            const tax = (subtotal * receiptData.taxRate) / 100;
+            const total = subtotal + tax;
+
+            // Generate random date, auth time, and terminal sequence number
+            receiptData.authTime = generateRandomAuthTime();
+            receiptData.acctNumber = generateRandomAcctNumber();
+            receiptData.terminalSeqNum = generateRandomTerminalSeqNum();
+            receiptData.timestamp = getRandomDate(minDate, maxDate);
+
+            // Create the receipt HTML
+            let itemLines = '';
+            for (let i = 0; i < lines; i++) {
+                itemLines += `<tr><td>${receiptData.items[0].name}</td><td>${receiptData.items[0].qty}</td><td>$${price.toFixed(2)}</td></tr>`;
+            }
+
+            return `
+                <div class="receipt">
+                    <p class="header">Welcome to<br>Luke Fuel Station</p>
+                    <p class="address">3425 Sky St, Phoenix, AZ 85004<br>Phone: (602) 555-1234</p>
+                    <div class="items">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemLines}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="totals">
+                        <table>
+                            <tr><td>Subtotal</td><td>$${subtotal.toFixed(2)}</td></tr>
+                            <tr><td>Tax</td><td>$${tax.toFixed(2)}</td></tr>
+                            <tr><td>Total</td><td>$${total.toFixed(2)}</td></tr>
+                        </table>
+                    </div>
+                    <div class="payment-info">
+                        <p>Card Type: ${receiptData.cardType}</p>
+                        <p>AUTH TIME: ${receiptData.authTime}</p>
+                        <p>ACCT NUMBER: ${receiptData.acctNumber}</p>
+                        <p>TRANS TYPE: ${receiptData.transType}</p>
+                        <p>Terminal Seq Num: ${receiptData.terminalSeqNum}</p>
+                    </div>
+                    <div class="extra-info">
+                        <p>Network Name: MASTERO</p>
+                        <p>PIN USED</p>
+                    </div>
+                    <p class="timestamp">${receiptData.timestamp}</p>
+                </div>
+            `;
+        }
+
+        // Function to generate multiple receipts based on user input
+        function generateReceipts() {
+            const numReceipts = parseInt(document.getElementById('num-receipts').value);
+            const receiptsContainer = document.getElementById('receipts-container');
+            receiptsContainer.innerHTML = ''; // Clear previous receipts
+
+            // Generate multiple receipts and append them
+            for (let i = 0; i < numReceipts; i++) {
+                receiptsContainer.innerHTML += createReceipt();
+            }
+        }
+
+        // Function to convert the receipts to PNGs using html2canvas
+        function downloadReceiptsAsPNG() {
+            const receipts = document.querySelectorAll('.receipt');
+            receipts.forEach((receipt, index) => {
+                html2canvas(receipt).then(canvas => {
+                    // Create a download link for each receipt
+                    const link = document.createElement('a');
+                    link.download = `receipt_${index + 1}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click(); // Automatically triggers the download
+                });
+            });
+        }
+    </script>
+</body>
+</html>
