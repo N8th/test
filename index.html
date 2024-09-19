@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <style>
         body {
             background-color: #f8f8f8;
@@ -62,6 +64,9 @@
             display: block;
             margin: 10px 0 5px;
         }
+        canvas {
+            display: block;
+        }
     </style>
     <title>Generate Multiple Receipts as PNG</title>
 </head>
@@ -99,7 +104,7 @@
 
         <div class="receipts" id="receipts-container"></div>
 
-        <button id="download-png" onclick="downloadReceiptsAsPNG()">Download Receipts as PNG</button>
+        <button id="download-png" onclick="downloadReceiptsAsPNG()">Download Receipts as ZIP</button>
     </div>
 
     <script>
@@ -226,18 +231,40 @@
             for (let i = 0; i < numReceipts; i++) {
                 receiptsContainer.innerHTML += createReceipt();
             }
+
+            // Display generated receipts as PNG images
+            setTimeout(displayReceiptsAsPNG, 500);
         }
 
-        // Function to convert the receipts to PNGs using html2canvas
-        function downloadReceiptsAsPNG() {
+        // Function to convert the receipts to PNGs and display them
+        function displayReceiptsAsPNG() {
             const receipts = document.querySelectorAll('.receipt');
-            receipts.forEach((receipt, index) => {
+            const receiptsContainer = document.getElementById('receipts-container');
+            receipts.forEach(receipt => {
                 html2canvas(receipt).then(canvas => {
-                    // Create a download link for each receipt
-                    const link = document.createElement('a');
-                    link.download = `receipt_${index + 1}.png`;
-                    link.href = canvas.toDataURL();
-                    link.click(); // Automatically triggers the download
+                    receipt.style.display = 'none'; // Hide original receipt
+                    receiptsContainer.appendChild(canvas); // Append PNG canvas
+                });
+            });
+        }
+
+        // Function to download all receipts as a ZIP file
+        function downloadReceiptsAsPNG() {
+            const receipts = document.querySelectorAll('canvas'); // Target the canvas receipts
+            const zip = new JSZip();
+            let imgCount = 0;
+
+            receipts.forEach((canvas, index) => {
+                canvas.toBlob(blob => {
+                    zip.file(`receipt_${index + 1}.png`, blob);
+                    imgCount++;
+
+                    // Once all receipts are added to the ZIP, generate and download it
+                    if (imgCount === receipts.length) {
+                        zip.generateAsync({ type: "blob" }).then(content => {
+                            saveAs(content, "receipts.zip");
+                        });
+                    }
                 });
             });
         }
